@@ -63,7 +63,65 @@ let rec check_exp env (pos, (exp, tref)) =
   | A.RealExp _ -> set tref T.REAL
   | A.StringExp _ -> set tref T.STRING
   | A.LetExp (decs, body) -> check_exp_let env pos tref decs body
+  | A.BinaryExp (l, op, r) -> 
+      let tl = check_exp env l in
+      let tr = check_exp env r in
+      begin match op with
+        | A.And 
+        | A.Or ->
+          begin match tl, tr with
+            | T.BOOL, T.BOOL -> set tref T.BOOL
+            | _ -> (
+              match tl with 
+              | T.BOOL -> type_mismatch pos T.BOOL tr 
+              | _ -> type_mismatch pos T.BOOL tl
+            )
+          end
+        | A.Plus 
+        | A.Minus 
+        | A.Times 
+        | A.Div 
+        | A.Mod 
+        | A.Power ->
+          begin match tl, tr with
+            | T.INT,  T.REAL 
+            | T.REAL, T.INT 
+            | T.REAL, T.REAL -> set tref T.REAL
+            | T.INT,  T.INT  -> set tref T.INT
+            | _              -> type_mismatch pos tl tr
+          end     
+        | A.Equal 
+        | A.NotEqual 
+        | A.LowerThan 
+        | A.GreaterThan 
+        | A.GreaterEqual 
+        | A.LowerEqual -> compatible tr tl pos; set tref T.BOOL
+        | _ -> Error.fatal "unimplemented"
+      end
+  | A.NegativeExp (exp) -> let result = check_exp env exp in 
+      begin match result with
+        | T.INT 
+        | T.REAL -> set tref result
+        | _ -> type_mismatch pos T.REAL result
+      end
+  | A.ExpSeq expList ->
+    let rec check_seq = function
+      | []        -> T.VOID
+      | [exp]     -> check_exp env exp
+      | exp::rest -> ignore (check_exp env exp); check_seq rest
+    in
+      check_seq expList
+  | A.BreakExp -> 
+    if(env.inloop) then
+      T.VOID
+    else 
+      Error.error pos "Break outside of loop"
+  | A.WhileExp (comp, sc) -> let env_inloop = {env with inloop = true} in
+      ignore(check_exp env_inloop comp); 
+      ignore(check_exp env_inloop sc); 
+      set tref T.VOID
   | _ -> Error.fatal "unimplemented"
+
 
 and check_exp_let env pos tref decs body =
   let env' = List.fold_left check_dec env decs in
