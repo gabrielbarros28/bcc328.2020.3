@@ -49,6 +49,13 @@ and var =
 
 and dec =
   | VarDec of vardec typed
+  | FunDec of fundec typed
+  [@@deriving show]
+
+and fundec = symbol * paramdef list * symbol * lexp
+  [@@deriving show]
+
+and paramdef = symbol * symbol
   [@@deriving show]
 
 and vardec = Symbol.symbol * Symbol.symbol option * lexp
